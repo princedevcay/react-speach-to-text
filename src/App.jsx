@@ -1,34 +1,81 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
+import { useState, useEffect } from 'react'
 import './App.css'
+import axios from 'axios';
+import { FaMicrophone, FaStop } from 'react-icons/fa';
 
 function App() {
-  const [count, setCount] = useState(0)
+
+  const [transcription, setTranscription] = useState('');
+  const [serverData, setServerData] = useState('');
+
+  const fetchServerData = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/data');
+      setServerData(response.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    fetchServerData();
+  }, []);
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SpeechRecognition();
+
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    let interimTranscription = '';
+    let finalTranscription = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalTranscription += transcript;
+      } else {
+        interimTranscription += transcript;
+      }
+    }
+
+    setTranscription(finalTranscription);
+    sendTranscription(finalTranscription); // send transcription to Flask server
+  };
+
+  recognition.onerror = (event) => {
+    console.error(event);
+  };
+
+  const startTranscription = () => {
+    recognition.start();
+  };
+
+  const stopTranscription = () => {
+    recognition.stop();
+  };
+
+  const sendTranscription = async (transcription) => {
+    try {
+      const response = await axios.post('http://localhost:5000/transcription', {
+        transcription: transcription
+      });
+      console.log(response);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   return (
-    <div className="App">
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+    <div>
+      <input type="text" defaultValue={transcription}/>
+      <button onClick={startTranscription}><FaMicrophone /></button>
+      <button onClick={stopTranscription}><FaStop/></button>
+      <p>Server data: {serverData}</p>
     </div>
-  )
+  );
 }
 
 export default App
